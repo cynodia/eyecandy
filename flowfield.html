@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flow Field · eyecandy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #back { position: fixed; top: 18px; left: 18px; color: rgba(255,255,255,.45);
+      font: 13px/1 system-ui, sans-serif; text-decoration: none;
+      border: 1px solid rgba(255,255,255,.2); padding: 6px 12px; border-radius: 20px;
+      transition: color .2s, border-color .2s; }
+    #back:hover { color: #fff; border-color: rgba(255,255,255,.6); }
+    #label { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,.3); font: 12px/1 system-ui, sans-serif; letter-spacing: .1em; }
+  </style>
+</head>
+<body>
+  <a href="index.html" id="back">← gallery</a>
+  <canvas id="c"></canvas>
+  <div id="label">FLOW FIELD</div>
+  <script>
+    // Simplex-like noise using a trigonometric approximation
+    function noise(x, y, z) {
+      // Smooth, deterministic pseudo-noise via overlapping sinusoids
+      const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.3) * 43758.5453;
+      return n - Math.floor(n);
+    }
+
+    function smoothNoise(x, y, z) {
+      // bi-linear interpolation over integer grid
+      const xi = Math.floor(x), yi = Math.floor(y);
+      const xf = x - xi, yf = y - yi;
+      const u = xf * xf * (3 - 2 * xf);
+      const v = yf * yf * (3 - 2 * yf);
+      const n00 = noise(xi,     yi,     z);
+      const n10 = noise(xi + 1, yi,     z);
+      const n01 = noise(xi,     yi + 1, z);
+      const n11 = noise(xi + 1, yi + 1, z);
+      return n00 + (n10 - n00) * u + (n01 - n00) * v + (n00 - n10 - n01 + n11) * u * v;
+    }
+
+    function fbm(x, y, z) {
+      let v = 0, amp = 0.5, freq = 1, max = 0;
+      for (let i = 0; i < 5; i++) {
+        v += smoothNoise(x * freq, y * freq, z) * amp;
+        max += amp; amp *= 0.5; freq *= 2.0;
+      }
+      return v / max;
+    }
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const NUM_PARTICLES = 1200;
+    const particles = Array.from({ length: NUM_PARTICLES }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      age: Math.random() * 200,
+      maxAge: 150 + Math.random() * 200,
+      hue: Math.random() * 360,
+    }));
+
+    let t = 0;
+    const SCALE = 0.003;
+    const SPEED = 2.2;
+
+    function loop() {
+      ctx.fillStyle = 'rgba(0,0,0,0.012)';
+      ctx.fillRect(0, 0, W, H);
+
+      particles.forEach(p => {
+        const nx = fbm(p.x * SCALE, p.y * SCALE, t * 0.0004);
+        const ny = fbm(p.x * SCALE + 5.3, p.y * SCALE + 9.1, t * 0.0004);
+        const angle = (nx - 0.5) * Math.PI * 4;
+
+        const px = p.x;
+        const py = p.y;
+        p.x += Math.cos(angle) * SPEED;
+        p.y += Math.sin(angle) * SPEED;
+        p.age++;
+
+        const alpha = Math.sin((p.age / p.maxAge) * Math.PI) * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(p.x, p.y);
+        ctx.strokeStyle = `hsla(${(p.hue + t * 0.05) % 360},70%,65%,${alpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // respawn
+        if (p.age > p.maxAge || p.x < 0 || p.x > W || p.y < 0 || p.y > H) {
+          p.x = Math.random() * W;
+          p.y = Math.random() * H;
+          p.age = 0;
+          p.maxAge = 150 + Math.random() * 200;
+          p.hue = Math.random() * 360;
+        }
+      });
+
+      t++;
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
